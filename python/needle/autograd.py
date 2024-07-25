@@ -1,7 +1,7 @@
 """Core data structures."""
 import needle
 from .backend_numpy import Device, cpu, all_devices
-from typing import List, Optional, NamedTuple, Tuple, Union
+from typing import List, Optional, NamedTuple, Tuple, Union, Dict
 from collections import namedtuple
 import numpy
 
@@ -381,7 +381,25 @@ def compute_gradient_of_variables(output_tensor, out_grad):
     reverse_topo_order = list(reversed(find_topo_sort([output_tensor])))
 
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    for node in reverse_topo_order:
+        # get list of grad contributions
+        output_grads_list = node_to_output_grads_list[node]
+        # compute grad of current node w.r.t. output node
+        # WARNING
+        # The routine to sum a list of tensors is provided at the bottom. Do
+        # not use Python built-in `sum`, which may lead to `dtype` mismatch.
+        # `dtype` coherence is significant during optimazation.
+        #
+        # `hw1.ipynb` elaborates on this caveat.
+        node.grad = sum_node_list(output_grads_list)
+        # propagate grad to inputs
+        if not node.is_leaf():
+            for node_input, grad in zip(node.inputs,
+                                        node.op.gradient_as_tuple(node.grad, node)):
+                if node_input not in node_to_output_grads_list:
+                    node_to_output_grads_list[node_input] = [grad]
+                else:
+                    node_to_output_grads_list[node_input].append(grad)
     ### END YOUR SOLUTION
 
 
@@ -394,14 +412,27 @@ def find_topo_sort(node_list: List[Value]) -> List[Value]:
     sort.
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    topo_order = []
+    visited = set()
+    for node in node_list:
+        if id(node) not in visited:
+            topo_sort_dfs(node, visited, topo_order)
+    return topo_order
     ### END YOUR SOLUTION
 
 
 def topo_sort_dfs(node, visited, topo_order):
     """Post-order DFS"""
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    visited.add(id(node))
+
+    if node.is_leaf():
+        topo_order.append(node)
+    else:
+        for node_input in node.inputs:
+            if id(node_input) not in visited:
+                topo_sort_dfs(node_input, visited, topo_order)
+        topo_order.append(node)
     ### END YOUR SOLUTION
 
 

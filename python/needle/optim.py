@@ -25,16 +25,29 @@ class SGD(Optimizer):
 
     def step(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        for p in self.params:
+            # It is necessary to check if a parameter has a gradient since it
+            # may not constitute the computational graph. This happens when
+            # multiplying a parameter with 0, which is simply weeded out in
+            # code using branches.
+            if p.grad is None:
+                continue
+            p_id = id(p)
+            grad = (1. - self.momentum) * (p.grad.data + self.weight_decay * p.data) + \
+                   self.momentum * self.u.get(p_id, 0.)
+            p.data -= self.lr * grad
+            self.u[p_id] = grad
         ### END YOUR SOLUTION
 
     def clip_grad_norm(self, max_norm=0.25):
         """
         Clips gradient norm of parameters.
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        total_norm = np.linalg.norm(np.array([np.linalg.norm(p.grad.detach().numpy()).reshape((1,)) for p in self.params]))
+        clip_coef = max_norm / (total_norm + 1e-6)
+        clip_coef_clamped = min((clip_coef.item(), 1.0))
+        for p in self.params:
+            p.grad = p.grad.detach() * clip_coef_clamped
 
 
 class Adam(Optimizer):
@@ -60,5 +73,19 @@ class Adam(Optimizer):
 
     def step(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.t += 1
+        for p in self.params:
+            # It is necessary to check if a parameter has a gradient since it
+            # may not constitute the computational graph. This happens when
+            # multiplying a parameter with 0, which is simply weeded out in
+            # code using branches.
+            if p.grad is None:
+                continue
+            p_id = id(p)
+            grad = p.grad.data + self.weight_decay * p.data
+            self.m[p_id] = self.beta1 * self.m.get(p_id, 0.) + (1. - self.beta1) * grad
+            self.v[p_id] = self.beta2 * self.v.get(p_id, 0.) + (1. - self.beta2) * grad ** 2.
+            m_hat = self.m[p_id] / (1. - self.beta1 ** self.t)
+            v_hat = self.v[p_id] / (1. - self.beta2 ** self.t)
+            p.data -= self.lr * m_hat / (v_hat ** .5 + self.eps)
         ### END YOUR SOLUTION
