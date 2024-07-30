@@ -4,8 +4,6 @@ sys.path.append("./python")
 import needle as ndl
 import numpy as np
 
-import mugrade
-
 
 def test_flip_horizontal():
     tform = ndl.data.RandomFlipHorizontal()
@@ -1426,35 +1424,6 @@ def test_flip_horizontal():
 
 
 # ----------------------------------------------------------------------------
-def submit_flip_horizontal():
-    tform = ndl.data.RandomFlipHorizontal(0.5)
-    np.random.seed(0)
-    for _ in range(2):
-        size_a, size_b, size_c = (
-            np.random.randint(1, 5),
-            np.random.randint(1, 5),
-            np.random.randint(1, 5),
-        )
-        mugrade.submit(tform(np.random.rand(size_a, size_b, size_c)))
-
-    tform = ndl.data.RandomFlipHorizontal(0)
-    for _ in range(2):
-        size_a, size_b, size_c = (
-            np.random.randint(1, 5),
-            np.random.randint(1, 5),
-            np.random.randint(1, 5),
-        )
-        mugrade.submit(tform(np.random.rand(size_a, size_b, size_c)))
-
-    tform = ndl.data.RandomFlipHorizontal(1.0)
-    for _ in range(2):
-        size_a, size_b, size_c = (
-            np.random.randint(1, 5),
-            np.random.randint(1, 5),
-            np.random.randint(1, 5),
-        )
-        mugrade.submit(tform(np.random.rand(size_a, size_b, size_c)))
-
 
 def test_random_crop():
     tform = ndl.data.RandomCrop(2)
@@ -10654,34 +10623,6 @@ def test_random_crop():
     np.testing.assert_allclose(tform(a), b)
 
 
-def submit_random_crop():
-    np.random.seed(0)
-    tform = ndl.data.RandomCrop(0)
-    for _ in range(2):
-        size_a, size_b, size_c = (
-            np.random.randint(4, 5),
-            np.random.randint(4, 6),
-            np.random.randint(4, 7),
-        )
-        mugrade.submit(tform(np.random.rand(size_a, size_b, size_c)))
-
-    tform = ndl.data.RandomCrop(2)
-    for _ in range(2):
-        size_a, size_b, size_c = (
-            np.random.randint(4, 5),
-            np.random.randint(4, 6),
-            np.random.randint(4, 7),
-        )
-        mugrade.submit(tform(np.random.rand(size_a, size_b, size_c)))
-
-    tform = ndl.data.RandomCrop(3)
-    for _ in range(2):
-        ize_a, size_b, size_c = (
-            np.random.randint(4, 5),
-            np.random.randint(4, 6),
-            np.random.randint(4, 7),
-        )
-        mugrade.submit(tform(np.random.rand(size_a, size_b, size_c)))
 
 
 def test_mnist_dataset():
@@ -10811,33 +10752,6 @@ def test_mnist_dataset():
     np.testing.assert_allclose(sample_labels, compare_labels)
 
 
-def submit_mnist_dataset():
-    mnist_train_dataset = ndl.data.MNISTDataset(
-        "data/train-images-idx3-ubyte.gz", "data/train-labels-idx1-ubyte.gz"
-    )
-    mugrade.submit(mnist_train_dataset[69][:25])
-    mugrade.submit(len(mnist_train_dataset))
-    np.random.seed(0)
-    tforms = [ndl.data.RandomFlipHorizontal()]
-    mnist_train_dataset = ndl.data.MNISTDataset(
-        "data/train-images-idx3-ubyte.gz",
-        "data/train-labels-idx1-ubyte.gz",
-        transforms=tforms,
-    )
-
-    for i in [822, 69, 420, 96]:
-        mugrade.submit(mnist_train_dataset[i][:-25])
-
-    tforms = [ndl.data.RandomCrop(15), ndl.data.RandomFlipHorizontal()]
-    mnist_train_dataset = ndl.data.MNISTDataset(
-        "data/train-images-idx3-ubyte.gz",
-        "data/train-labels-idx1-ubyte.gz",
-        transforms=tforms,
-    )
-
-    for i in [822, 69, 420, 96]:
-        mugrade.submit(mnist_train_dataset[i][:-25])
-
 
 def test_dataloader_mnist():
     batch_size = 1
@@ -10952,53 +10866,6 @@ def test_dataloader_ndarray():
     )
 
 
-def submit_dataloader():
-    batch_size = 1
-    mnist_train_dataset = ndl.data.MNISTDataset(
-        "data/train-images-idx3-ubyte.gz", "data/train-labels-idx1-ubyte.gz"
-    )
-    mnist_train_dataloader = ndl.data.DataLoader(
-        dataset=mnist_train_dataset, batch_size=batch_size, shuffle=False
-    )
-    subl = []
-    for i, batch in enumerate(mnist_train_dataloader):
-        batch_x, batch_y = batch[0].numpy(), batch[1].numpy()
-        subl.append(np.sum(batch_x[10:15, 10:15]))
-        subl.append(np.sum(batch_y))
-        if i > 2:
-            break
-    mugrade.submit(subl)
-
-    batch_size = 5
-    mnist_test_dataset = ndl.data.MNISTDataset(
-        "data/t10k-images-idx3-ubyte.gz", "data/t10k-labels-idx1-ubyte.gz"
-    )
-    mnist_test_dataloader = ndl.data.DataLoader(
-        dataset=mnist_test_dataset, batch_size=batch_size, shuffle=False
-    )
-
-    subl_x = []
-    subl_y = []
-    for i, batch in enumerate(mnist_test_dataloader):
-        batch_x, batch_y = batch[0].numpy(), batch[1].numpy()
-        subl_x.append(batch_x[10:15, 10:15])
-        subl_y.append(batch_y)
-
-    mugrade.submit(subl_x[-2:])
-    mugrade.submit(subl_y[-2:])
-
-    np.random.seed(0)
-    shuf = ndl.data.DataLoader(dataset=mnist_test_dataset, batch_size=10, shuffle=True)
-    subl_x = []
-    subl_y = []
-    for i, batch in enumerate(mnist_test_dataloader):
-        batch_x, batch_y = batch[0].numpy(), batch[1].numpy()
-        subl_x.append(batch_x[10:15, 10:15])
-        subl_y.append(batch_y)
-        if i > 2:
-            break
-    mugrade.submit(subl_x)
-    mugrade.submit(subl_y)
 
 
 if __name__ == "__main__":
