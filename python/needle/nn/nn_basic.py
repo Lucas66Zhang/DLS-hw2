@@ -88,16 +88,10 @@ class Linear(Module):
         self.out_features = out_features
 
         ### BEGIN YOUR SOLUTION
-        self.weight = Parameter(init.kaiming_uniform(fan_in=self.in_features,
-                                                     fan_out=self.out_features,
-                                                     device=device, dtype=dtype,
-                                                     requires_grad=True)) # Is this line necessary?
+        self.weight = Parameter(init.kaiming_uniform(in_features, out_features)) # Is this line necessary?
         if bias: # Do not learn a bias if `bias` is FALSE.
-            self.bias = Parameter(ops.reshape(init.kaiming_uniform(fan_in=self.out_features,
-                                                                   fan_out=1,
-                                                                   device=device, dtype=dtype,
-                                                                   requires_grad=True), # Is this line necessary?
-                                              shape=(1, self.out_features)))
+            self.bias = Parameter(init.kaiming_uniform(out_features, 1))
+            self.bias = ops.transpose(self.bias)
         ### END YOUR SOLUTION
 
     def forward(self, X: Tensor) -> Tensor:
@@ -117,13 +111,10 @@ class Linear(Module):
         #                                     X.shape[ :-1] + (self.out_features,))
         #
         #    This irreversiblly modifies of the shape of `self.bias`.
-        try:
-            bias = self.bias
-        except AttributeError:
-            return X @ self.weight
+        if self.bias:
+            return ops.matmul(X, self.weight) + self.bias
         else:
-            return X @ self.weight + ops.broadcast_to(bias,
-                                                      X.shape[ :-1] + (self.out_features,))
+            return ops.matmul(X, self.weight)
 
 
 class Flatten(Module):
@@ -146,8 +137,8 @@ class Sequential(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        for fn in self.modules:
-            x = fn(x)
+        for module in self.modules:
+            x = module(x)
         return x
         ### END YOUR SOLUTION
 
@@ -155,13 +146,12 @@ class Sequential(Module):
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor):
         ### BEGIN YOUR SOLUTION
-        z_y = ops.summation(logits * init.one_hot(logits.shape[-1], y,
-                                                  device=logits.device,
-                                                  dtype=logits.dtype,
-                                                  requires_grad=False),
-                            axes=(-1,))
-        return ops.summation(ops.logsumexp(logits,
-                                           axes=(-1,)) - z_y) / logits.shape[0]
+        y_one_hot = init.one_hot(logits.shape[1], y)
+        z_y = (logits * y_one_hot).sum()
+        sum_z_i = ops.logsumexp(logits, axis=(1, )).sum()
+        delta = sum_z_i - z_y
+        loss = delta / logits.shape[0]
+        return loss
         ### END YOUR SOLUTION
 
 
@@ -172,52 +162,26 @@ class BatchNorm1d(Module):
         self.eps = eps
         self.momentum = momentum
         ### BEGIN YOUR SOLUTION
-        self.weight = Parameter(init.ones(1, self.dim,
-                                          device=device, dtype=dtype,
-                                          requires_grad=True)) # Is this line necessary?
-        self.bias = Parameter(init.zeros(1, self.dim,
-                                         device=device, dtype=dtype,
-                                         requires_grad=True)) # Is this line necessary?
-        # The running estimates is updated during training. They do not
-        # constitute the computational graph, hence are fixed in evaluation.
-        self.running_mean = init.zeros(self.dim,
-                                       device=device, dtype=dtype,
-                                       requires_grad=False)
-        self.running_var = init.ones(self.dim,
-                                     device=device, dtype=dtype,
-                                     requires_grad=False)
+        self.weight = Parameter(init.ones(dim, requires_grad=True)) # Is this line necessary?
+        self.bias = Parameter(init.zeros(dim, requires_grad=True)) # Is this line necessary?
+        self.running_mean = init.zeros(dim)
+        self.running_var = init.ones(dim)
         ### END YOUR SOLUTION
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         # Needle does not support implicit broadcasting.
         # Do not forget to broadcast weight and bias.
-        mean = ops.summation(x, axes=(-2,)) / x.shape[-2]
-        shift = x - ops.broadcast_to(ops.reshape(mean,
-                                                 (1, self.dim)),
-                                     x.shape)
-        var = ops.summation(shift ** 2. ,
-                            axes=(-2,)) / x.shape[-2]
         if self.training:
-            # `running_mean` and `running_var` do not constitute the
-            # computational graph. Only update their `cached_data`.
-            self.running_mean.data = (1. - self.momentum) * self.running_mean.data + self.momentum * mean.data
-            self.running_var.data  = (1. - self.momentum) * self.running_var.data  + self.momentum * var.data
-            std = ops.broadcast_to(ops.reshape((var + self.eps) ** .5,
-                                               (1, self.dim)),
-                                   x.shape)
-            return ops.broadcast_to(self.weight,
-                                    x.shape) * shift / std + ops.broadcast_to(self.bias,
-                                                                              x.shape)
+            batch_mean = x.sum((0,)) / x.shape[0]
+            batch_var = ((x - batch_mean.reshape((1, x.shape[1])).broadcast_to(x.shape)) ** 2).sum((0,)) / x.shape[0]
+            self.running_mean = (1 - self.momentum) * self.running_mean + self.momentum * batch_mean.data
+            self.running_var = (1 - self.momentum) * self.running_var + self.momentum * batch_var.data
+            norm = (x - batch_mean.reshape((1, x.shape[1])).broadcast_to(x.shape)) / (batch_var.reshape((1, x.shape[1])).broadcast_to(x.shape) + self.eps) ** .5
+            return self.weight.reshape((1, x.shape[1])).broadcast_to(x.shape) * norm + self.bias.reshape((1, x.shape[1])).broadcast_to(x.shape)
         else:
-            x_hat = (x - ops.broadcast_to(ops.reshape(self.running_mean.data,
-                                                      (1, self.dim)),
-                                          x.shape)) / ops.broadcast_to(ops.reshape((self.running_var.data + self.eps) ** .5,
-                                                                                   (1, self.dim)),
-                                                                       x.shape)
-            return ops.broadcast_to(self.weight.data,
-                                    x.shape) * x_hat + ops.broadcast_to(self.bias.data,
-                                                                        x.shape)
+            norm = (x - self.running_mean.reshape((1, x.shape[1])).broadcast_to(x.shape)) / (self.running_var.reshape((1, x.shape[1])).broadcast_to(x.shape) + self.eps) ** .5
+            return self.weight.reshape((1, x.shape[1])).broadcast_to(x.shape) * norm + self.bias.reshape((1, x.shape[1])).broadcast_to(x.shape)
 
 
 class LayerNorm1d(Module):

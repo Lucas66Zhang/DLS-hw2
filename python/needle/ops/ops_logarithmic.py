@@ -25,58 +25,36 @@ def logsoftmax(a):
 
 class LogSumExp(TensorOp):
     def __init__(self, axes: Optional[tuple] = None):
-        if axes is None:
-            self.axes = None
-        elif isinstance(axes, int):
-            self.axes = (axes,)
-        else:
-            self.axes = axes
+        self.axes = axes
 
     def compute(self, Z):
         ### BEGIN YOUR SOLUTION
         #
         self.max = Z.max(axis=self.axes)
-        # `self.axes` must be a tuple, even if it is a single integer.
-        # Otherwise, `self.axes` is considered FALSE when assigned 0.
-        # if self.axes:
-        if self.axes is not None:
-            # broadcast `z_max` to shape of `Z`
-            reduced_shape = list(Z.shape)
-            for i in self.axes:
-                reduced_shape[i] = 1
-            self.reduced_shape = tuple(reduced_shape)
-        else:
-            self.reduced_shape = (1,) * len(Z.shape)
-        return self.max + \
-            array_api.log(
-                array_api.sum(
-                    array_api.exp(
-                        Z - array_api.broadcast_to(
-                            array_api.reshape(
-                                self.max, self.reduced_shape
-                            ), Z.shape
-                        )
-                    ), self.axes
-                )
-            )
-        # else:
-        #   self.reduced_shape = (1,) * len(Z.shape)
-        #   return self.max + array_api.log(array_api.summation(array_api.exp(Z - self.max)))
+        max_Z = array_api.max(Z, axis=self.axes, keepdims=True)
+        res = Z - max_Z
+        res = array_api.exp(res)
+        res = array_api.sum(res, axis=self.axes)
+        res = array_api.log(res)
+        res += max_Z.reshape(res.shape)
+        return res
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        exp_z = exp(node.inputs[0] - reshape(Tensor(self.max,
-                                                    dtype=node.inputs[0].dtype,
-                                                    requires_grad=False),
-                                             self.reduced_shape))
-        # Needle summation does not preserve original shape.
-        sum_z = reshape(summation(exp_z, self.axes),
-                        self.reduced_shape)
-        out_grad = reshape(out_grad, self.reduced_shape)
+        Z = node.inputs.realize_cached_data()
+        Z -= array_api.max(Z, axis=self.axes, keepdims=True)
+        Z = Tensor(Z)
 
-        return multiply(out_grad,
-                        divide(exp_z, sum_z))
+        grad_1 = out_grad / summation(exp(Z), axis=self.axes)
+        shape = [i for i in out_grad.shape]
+        if self.axes:
+            for axis in self.axes:
+                shape.insert(axis, 1)
+        else:
+            shape = [1 for _ in range(len(out_grad.shape))]
+        grad_2 = broadcast_to(reshape(grad_1, shape), Z.shape)
+        return grad_2 * exp(Z)
         ### END YOUR SOLUTION
 
 
