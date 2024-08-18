@@ -29,8 +29,6 @@ class LogSumExp(TensorOp):
 
     def compute(self, Z):
         ### BEGIN YOUR SOLUTION
-        #
-        self.max = Z.max(axis=self.axes)
         max_Z = array_api.max(Z, axis=self.axes, keepdims=True)
         res = Z - max_Z
         res = array_api.exp(res)
@@ -42,11 +40,11 @@ class LogSumExp(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        Z = node.inputs.realize_cached_data()
+        Z = node.inputs[0].realize_cached_data()
         Z -= array_api.max(Z, axis=self.axes, keepdims=True)
         Z = Tensor(Z)
 
-        grad_1 = out_grad / summation(exp(Z), axis=self.axes)
+        grad_1 = out_grad / summation(exp(Z), self.axes)
         shape = [i for i in out_grad.shape]
         if self.axes:
             for axis in self.axes:

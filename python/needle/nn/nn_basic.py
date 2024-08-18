@@ -148,7 +148,7 @@ class SoftmaxLoss(Module):
         ### BEGIN YOUR SOLUTION
         y_one_hot = init.one_hot(logits.shape[1], y)
         z_y = (logits * y_one_hot).sum()
-        sum_z_i = ops.logsumexp(logits, axis=(1, )).sum()
+        sum_z_i = ops.logsumexp(logits, axes=(1, )).sum()
         delta = sum_z_i - z_y
         loss = delta / logits.shape[0]
         return loss

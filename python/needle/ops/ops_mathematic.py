@@ -323,7 +323,7 @@ class ReLU(TensorOp):
         out = node.realize_cached_data().copy()
         out[out > 0] = 1
         # out[out <= 0] = 0
-        return multiply(out_grad, out)
+        return multiply(Tensor(out), out_grad)
         ### END YOUR SOLUTION
 
 
