@@ -88,10 +88,19 @@ class Linear(Module):
         self.out_features = out_features
 
         ### BEGIN YOUR SOLUTION
-        self.weight = Parameter(init.kaiming_uniform(in_features, out_features)) # Is this line necessary?
+        # self.weight = Parameter(init.kaiming_uniform(in_features, out_features)) # Is this line necessary?
+        self.weight = Parameter(init.kaiming_uniform(fan_in=self.in_features,
+                                                     fan_out=self.out_features,
+                                                     device=device, dtype=dtype,
+                                                     requires_grad=True))
         if bias: # Do not learn a bias if `bias` is FALSE.
-            self.bias = Parameter(init.kaiming_uniform(out_features, 1))
-            self.bias = ops.transpose(self.bias)
+            # self.bias = Parameter(init.kaiming_uniform(out_features, 1))
+            # self.bias = ops.transpose(self.bias)
+            self.bias = Parameter(ops.reshape(init.kaiming_uniform(fan_in=self.out_features,
+                                                                   fan_out=1,
+                                                                   device=device, dtype=dtype,
+                                                                   requires_grad=True),  # Is this line necessary?
+                                              shape=(1, self.out_features)))
         ### END YOUR SOLUTION
 
     def forward(self, X: Tensor) -> Tensor:
@@ -112,7 +121,7 @@ class Linear(Module):
         #
         #    This irreversiblly modifies of the shape of `self.bias`.
         if self.bias:
-            return ops.matmul(X, self.weight) + self.bias
+            return ops.matmul(X, self.weight) + ops.broadcast_to(self.bias, X.shape[:-1] + (self.out_features,))
         else:
             return ops.matmul(X, self.weight)
 
